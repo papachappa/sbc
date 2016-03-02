@@ -1,0 +1,129 @@
+*** Settings ***
+Resource        ${COMMON_SETTINGS_FILE}
+
+Suite Setup         Run Keywords        Setup Sipp    Restoring SBC Without Transcode config   Restoring MVSIP config    Stop Sending MVSIP RTP    Restart SBC and MCU Restore Config
+#Suite Teardown      Sleep       3
+
+*** Variables ***
+
+${TrafficLevel}                         13    # При вычислении количества вызовов умножаем на 2 если запускаем 2 копии MVSIP. (20*10000)*2 - кол-во одновр вызовов
+${IterationsLimit}                      900
+${RTP_time}                             10000
+
+*** Test Cases ***
+
+
+Check In Cfg File
+      [Documentation]                    Проверяем правильность конфигов SBC
+      SBC.Check SBC Conf Contain         ExtGate = "${remote_lib_host}:5555"   IntGate = "${remote_lib_host}:5556"    Interface = ${remote_lib_host}
+      Sleep                              1
+
+
+Check Host and Port In MV-SIP configs 
+      [Documentation]                    Проверяем правильность конфигов MV-SIP параметры Hosts and Ports
+      Sleep                              1
+
+
+Make changes In MV-SIP configs
+      [Documentation]                    Настраиваем конфиги MV-SIP
+
+      @{int_1} =                         SBC.Get Integer       ${MVSIP0_cfg_file}     TrafficLevel =    IterationsLimit =    RTP_time =
+      @{int_2} =                         SBC.Get Integer       ${MVSIP1_cfg_file}     TrafficLevel =    IterationsLimit =    RTP_time =
+      @{int_3} =                         SBC.Get Integer       ${MVSIP2_cfg_file}     TrafficLevel =    IterationsLimit =    RTP_time =
+      @{int_4} =                         SBC.Get Integer       ${MVSIP3_cfg_file}     TrafficLevel =    IterationsLimit =    RTP_time =
+
+      SBC.Replace String                 ${MVSIP0_cfg_file}         TrafficLevel = @{int_1}[0]        TrafficLevel = ${TrafficLevel}
+      SBC.Replace String                 ${MVSIP0_cfg_file}         IterationsLimit = @{int_1}[1]     IterationsLimit = ${IterationsLimit}
+      SBC.Replace String                 ${MVSIP0_cfg_file}         RTP_time = @{int_1}[2]            RTP_time = ${RTP_time}
+      Sleep                              1
+
+      SBC.Replace String                 ${MVSIP1_cfg_file}    TrafficLevel = @{int_2}[0]        TrafficLevel = ${TrafficLevel}
+      SBC.Replace String                 ${MVSIP1_cfg_file}    IterationsLimit = @{int_2}[1]     IterationsLimit = ${IterationsLimit}
+      SBC.Replace String                 ${MVSIP1_cfg_file}    RTP_time = @{int_2}[2]            RTP_time = ${RTP_time}
+      Sleep                              1
+
+      SBC.Replace String                 ${MVSIP2_cfg_file}    TrafficLevel = @{int_3}[0]        TrafficLevel = ${TrafficLevel}
+      SBC.Replace String                 ${MVSIP2_cfg_file}    IterationsLimit = @{int_3}[1]     IterationsLimit = ${IterationsLimit}
+      SBC.Replace String                 ${MVSIP2_cfg_file}    RTP_time = @{int_3}[2]            RTP_time = ${RTP_time}
+      Sleep                              1
+
+      SBC.Replace String                 ${MVSIP3_cfg_file}    TrafficLevel = @{int_4}[0]        TrafficLevel = ${TrafficLevel}
+      SBC.Replace String                 ${MVSIP3_cfg_file}    IterationsLimit = @{int_4}[1]     IterationsLimit = ${IterationsLimit}
+      SBC.Replace String                 ${MVSIP3_cfg_file}    RTP_time = @{int_4}[2]            RTP_time = ${RTP_time}
+      Sleep                              1
+
+
+
+Check Loadable Parameters In MV-SIP configs
+      [Documentation]                    Проверяем правильность конфигов MV-SIP нагрузочные параметры
+      Sleep                              1
+
+Define folder for logs
+       [Documentation]                     Создаем папку для логов
+       SippA.Run Scenario                  ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_without_transcoding
+
+Start Sending MV-SIP
+     [Documentation]                     Запускаем MV-SIP
+     Sleep                               5
+     Manipulation.Run Command            cd ${MVSIP_REMOTE_PATH}/1 && ./start    ${remote_lib_host}
+     Manipulation.Run Command            cd ${MVSIP_REMOTE_PATH}/2 && ./start    ${remote_lib_host}
+     Sleep                               2
+     Manipulation.Run Command            cd ${MVSIP_REMOTE_PATH}/0 && ./start    ${remote_lib_host}
+     Manipulation.Run Command            cd ${MVSIP_REMOTE_PATH}/3 && ./start    ${remote_lib_host}
+
+
+Run Top Command
+     [Documentation]                     Запускаем команду top во время совершения вызовов и во время передачи RTP 
+     Sleep                               2
+     Manipulation.Run Command            top -n 1 -b > ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_without_transcoding/top_layout_during_call_setup   ${remote_lib_host}
+     Sleep                               7
+     Manipulation.Run Command            top -n 1 -b > ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_without_transcoding/top_layout_after_call_setup    ${remote_lib_host}
+
+Import SBC Logs
+      Sleep                              45
+     [Documentation]                     Импортируем SBC логи
+     Import SippA SBC Logs
+
+Import MCU Logs
+     [Documentation]                     Импортируем MCU логи
+     Import SippA MCU Logs
+
+
+Import MVSIP 0 and 1 Logs
+     [Documentation]                     Импортируем MVSIP логи
+     Import MVSIP Logs
+
+Check SBC Diagnostic File
+     [Documentation]                     Проверяем файл диагностики SBC на наличие ошибки ALR Reject This Call
+     SBC.Check SBC Diagnostic Log        ALG reject this call
+
+Check MV-SIP Log Files
+     [Documentation]                     Проверяем MV-SIP логи на наличие несостоявшихся вызовов
+     SippA.Check MVSIP Logs
+
+Call Duration
+     [Documentation]                     Подсчитываем среднюю длительность вызовов
+      ${call_duration}                   SippA.Count Call Duration
+      Set Suite Variable                 ${call_duration}
+      LOG TO CONSOLE                     ''
+      LOG TO CONSOLE                     Средняя длительность вызовов ${call_duration} секунд по данным sbc_cdr.log
+
+Total Amount Of Calls
+     [Documentation]                     Подсчитываем количество одновременных вызовов
+      ${doubled_call_duration}           Evaluate    ${call_duration} + ${call_duration}
+      ${concurrent_calls}                SippA.Perfomance Concurrent Calls
+      LOG TO CONSOLE                       ''
+      LOG TO CONSOLE                     Общее количество одновременных вызовов за ${doubled_call_duration} секунд ${concurrent_calls} (примерное) по данным sbc_cdr.log
+
+
+Count Successfull Calls
+     [Documentation]                      Подсчитываем количество BYE успешных вызовов на которых получен 200 OK
+     ${successfull_calls_OP1}             SippA.Count SIP BYE Messages    OP1
+     ${successfull_calls_OP2}             SippA.Count SIP BYE Messages    OP2
+      LOG TO CONSOLE                       ''
+      LOG TO CONSOLE                       Количество успешных вызовов первого оператора ${successfull_calls_OP1}
+      LOG TO CONSOLE                       ''
+      LOG TO CONSOLE                       Количество успешных вызовов второго оператора ${successfull_calls_OP2}
+
+
+

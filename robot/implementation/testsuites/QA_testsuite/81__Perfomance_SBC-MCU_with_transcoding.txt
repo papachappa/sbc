@@ -1,0 +1,179 @@
+*** Settings ***
+Resource        ${COMMON_SETTINGS_FILE}
+
+Suite Setup         Run Keywords        Setup Sipp    Restoring SBC With Transcode config   Restoring MVSIP config    Stop Sending MVSIP RTP    Restart SBC and MCU Restore Config
+#Suite Teardown      Sleep       3
+
+*** Variables ***
+
+${TrafficLevel}                         5    # При вычислении количества вызовов умножаем на 2 если запускаем 2 копии MVSIP. (20*10000)*2 - кол-во одновр вызовов
+${IterationsLimit}                      900
+${RTP_time}                             10000
+
+${tshark}                            ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/tshark.pcap
+${rtp_results}                       ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/rtp_results.txt
+${5555-5060}                         ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/5555-5060.pcap
+${5062-5556}                         ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/5062-5556.pcap
+${5060-5555}                         ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/5060-5555.txt
+${5556-5062}                         ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/5556-5062.txt
+
+${5558-5066}                         ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/5558-5066.pcap
+${5064-5557}                         ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/5064-5557.pcap
+${5066-5558}                         ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/5066-5558.txt
+${5557-5064}                         ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/5557-5064.txt
+
+*** Test Cases ***
+
+Check In Cfg File
+      [Documentation]                    Проверяем правильность конфигов SBC
+      SBC.Check SBC Conf Contain         ExtGate = "${remote_lib_host}:5557"   IntGate = "${remote_lib_host}:5558"    Interface = ${remote_lib_host}    Allowed
+      Sleep                              1
+
+
+Check Host and Port In MV-SIP configs 
+      [Documentation]                    Проверяем правильность конфигов MV-SIP параметры Hosts and Ports
+      Sleep                              1
+
+
+Make changes In MV-SIP configs
+      [Documentation]                    Настраиваем конфиги MV-SIP
+
+      @{int_1} =                         SBC.Get Integer       ${MVSIP0_cfg_file}     TrafficLevel =    IterationsLimit =    RTP_time =
+      @{int_2} =                         SBC.Get Integer       ${MVSIP1_cfg_file}     TrafficLevel =    IterationsLimit =    RTP_time =
+      @{int_3} =                         SBC.Get Integer       ${MVSIP2_cfg_file}     TrafficLevel =    IterationsLimit =    RTP_time =
+      @{int_4} =                         SBC.Get Integer       ${MVSIP3_cfg_file}     TrafficLevel =    IterationsLimit =    RTP_time =
+
+      SBC.Replace String                 ${MVSIP0_cfg_file}         TrafficLevel = @{int_1}[0]        TrafficLevel = ${TrafficLevel}
+      SBC.Replace String                 ${MVSIP0_cfg_file}         IterationsLimit = @{int_1}[1]     IterationsLimit = ${IterationsLimit}
+      SBC.Replace String                 ${MVSIP0_cfg_file}         RTP_time = @{int_1}[2]            RTP_time = ${RTP_time}
+      Sleep                              1
+
+      SBC.Replace String                 ${MVSIP1_cfg_file}    TrafficLevel = @{int_2}[0]        TrafficLevel = ${TrafficLevel}
+      SBC.Replace String                 ${MVSIP1_cfg_file}    IterationsLimit = @{int_2}[1]     IterationsLimit = ${IterationsLimit}
+      SBC.Replace String                 ${MVSIP1_cfg_file}    RTP_time = @{int_2}[2]            RTP_time = ${RTP_time}
+      Sleep                              1
+
+      SBC.Replace String                 ${MVSIP2_cfg_file}    TrafficLevel = @{int_3}[0]        TrafficLevel = ${TrafficLevel}
+      SBC.Replace String                 ${MVSIP2_cfg_file}    IterationsLimit = @{int_3}[1]     IterationsLimit = ${IterationsLimit}
+      SBC.Replace String                 ${MVSIP2_cfg_file}    RTP_time = @{int_3}[2]            RTP_time = ${RTP_time}
+      Sleep                              1
+
+      SBC.Replace String                 ${MVSIP3_cfg_file}    TrafficLevel = @{int_4}[0]        TrafficLevel = ${TrafficLevel}
+      SBC.Replace String                 ${MVSIP3_cfg_file}    IterationsLimit = @{int_4}[1]     IterationsLimit = ${IterationsLimit}
+      SBC.Replace String                 ${MVSIP3_cfg_file}    RTP_time = @{int_4}[2]            RTP_time = ${RTP_time}
+      Sleep                              1
+
+
+
+Check Loadable Parameters In MV-SIP configs
+      [Documentation]                    Проверяем правильность конфигов MV-SIP нагрузочные параметры
+      Sleep                              1
+
+Define folder for logs
+       [Documentation]                     Создаем папку для логов
+       SippA.Run Scenario                  ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding
+
+
+Running Tshark
+    [Documentation]                      Запускаем thark для снятия дампа вызовов
+    Manipulation.Tshark                  45    ${tshark}    ${remote_lib_host}
+
+
+Start Sending MV-SIP
+     [Documentation]                     Запускаем MV-SIP
+     Sleep                               2
+     Manipulation.Run Command            cd ${MVSIP_REMOTE_PATH}/1 && ./start    ${remote_lib_host}
+     Manipulation.Run Command            cd ${MVSIP_REMOTE_PATH}/2 && ./start    ${remote_lib_host}
+     Sleep                               2
+     Manipulation.Run Command            cd ${MVSIP_REMOTE_PATH}/0 && ./start    ${remote_lib_host}
+     Manipulation.Run Command            cd ${MVSIP_REMOTE_PATH}/3 && ./start    ${remote_lib_host}
+
+
+Run Top Command
+     [Documentation]                     Запускаем команду top во время совершения вызовов и во время передачи RTP 
+     Sleep                               2
+     Manipulation.Run Command            top -n 1 -b > ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/top_layout_during_call_setup   ${remote_lib_host}
+     Sleep                               7
+     Manipulation.Run Command            top -n 1 -b > ${SCENARIO_PATH}/perfomance_SBC/Perfomance_SBC-MCU_with_transcoding/top_layout_after_call_setup    ${remote_lib_host}
+
+Import SBC Logs
+      Sleep                              45
+     [Documentation]                     Импортируем SBC логи
+     Import SippA SBC Logs
+
+Import MCU Logs
+     [Documentation]                     Импортируем MCU логи
+     Import SippA MCU Logs
+
+
+Import MVSIP 0 and 1 Logs
+     [Documentation]                     Импортируем MVSIP логи
+     Import MVSIP Logs
+
+
+
+Running SIP/SDP Parser
+      [Documentation]                       Запускаем sip/sdp parser для разбора sip сообщений и проверки правильности транскодинга
+      SBC.Run Command                       sngrep -I ${tshark} host ${remote_lib_host} and port 5555 -O ${5555-5060} -N
+      SBC.Run Command                       sngrep -I ${tshark} host ${remote_lib_host} and port 5556 -O ${5062-5556} -N
+      SBC.Run Command                       sipgrep -I ${5555-5060} '^SIP/2.0 200 OK' -P 5060-5070 > ${5060-5555}
+      SBC.Run Command                       sipgrep -I ${5062-5556} '^SIP/2.0 200 OK' -P 5060-5070 > ${5556-5062}
+
+      SBC.Run Command                       sngrep -I ${tshark} host ${remote_lib_host} and port 5558 -O ${5558-5066} -N
+      SBC.Run Command                       sngrep -I ${tshark} host ${remote_lib_host} and port 5557 -O ${5064-5557} -N
+      SBC.Run Command                       sipgrep -I ${5558-5066} '^SIP/2.0 200 OK' -P 5060-5070 > ${5066-5558}
+      SBC.Run Command                       sipgrep -I ${5064-5557} '^SIP/2.0 200 OK' -P 5060-5070 > ${5557-5064}
+
+Check Transcoding
+      [Documentation]                       Проверка файлов дампов на правильность транскодинга
+      SBC.Check Regular File                ${5060-5555}    ${remote_lib_host}:5060 -> ${remote_lib_host}:5555   m=audio \d+ RTP/AVP 8\.
+      SBC.Check Regular File                ${5556-5062}    ${remote_lib_host}:5556 -> ${remote_lib_host}:5062   m=audio \d+ RTP/AVP 18\.
+      SBC.Check Regular File                ${5066-5558}    ${remote_lib_host}:5066 -> ${remote_lib_host}:5558   m=audio \d+ RTP/AVP 18\.
+      SBC.Check Regular File                ${5557-5064}    ${remote_lib_host}:5557 -> ${remote_lib_host}:5064   m=audio \d+ RTP/AVP 8\.
+
+
+Evaluate quality of RTP stream
+     [Documentation]                       Оцениваем качество RTP потока
+     Manipulation.Tshark Dump              ${tshark}    ${rtp_results}   ${remote_lib_host}
+     SBC.Count RTP Stat                    ${rtp_results}      3       packet_loss
+     SBC.Count RTP Stat                    ${rtp_results}      80     max_delta      # 20-30ms for PCMA codec, 40-50ms for G729 (берем максимум из двух кодеков с запасом)
+     SBC.Count RTP Stat                    ${rtp_results}      25      max_jitter     # 20-30ms
+
+
+Check SBC Diagnostic File
+     [Documentation]                     Проверяем файл диагностики SBC на наличие ошибки ALR Reject This Call
+     SBC.Check SBC Diagnostic Log        ALG reject this call
+
+Check MV-SIP Log Files
+     [Documentation]                     Проверяем MV-SIP логи на наличие несостоявшихся вызовов
+     SippA.Check MVSIP Logs
+
+Call Duration
+     [Documentation]                     Подсчитываем среднюю длительность вызовов
+      ${call_duration}                   SippA.Count Call Duration
+      Set Suite Variable                 ${call_duration}
+      LOG TO CONSOLE                     ''
+      LOG TO CONSOLE                     Средняя длительность вызовов ${call_duration} секунд по данным sbc_cdr.log
+
+Total Amount Of Calls
+     [Documentation]                     Подсчитываем количество одновременных вызовов
+      ${doubled_call_duration}           Evaluate    ${call_duration} + ${call_duration}
+      ${concurrent_calls}                SippA.Perfomance Concurrent Calls
+      LOG TO CONSOLE                       ''
+      LOG TO CONSOLE                     Общее количество одновременных вызовов за ${doubled_call_duration} секунд ${concurrent_calls} (примерное) по данным sbc_cdr.log
+
+
+Count Successfull Calls
+     [Documentation]                      Подсчитываем количество BYE успешных вызовов на которых получен 200 OK
+     ${successfull_calls_OP1}             SippA.Count SIP BYE Messages    OP1
+     ${successfull_calls_OP2}             SippA.Count SIP BYE Messages    OP2
+      LOG TO CONSOLE                       ''
+      LOG TO CONSOLE                       Количество успешных вызовов первого оператора ${successfull_calls_OP1}
+      LOG TO CONSOLE                       ''
+      LOG TO CONSOLE                       Количество успешных вызовов второго оператора ${successfull_calls_OP2}
+
+
+
+# The delta is the time difference between the current packet and the previous packet in the stream. Max delta is the largest delta value
+# http://www.cisco.com/c/en/us/support/docs/voice/voice-quality/7934-bwidth-consume.html
+# http://www.en.voipforo.com/codec/codecs.php
